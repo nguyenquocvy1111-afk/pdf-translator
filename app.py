@@ -1,12 +1,11 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 
 st.title("📄 PDF Translator (EN → VI)")
 
 uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
 
-translator = Translator()
 
 if uploaded_file:
     reader = PdfReader(uploaded_file)
@@ -17,7 +16,7 @@ if uploaded_file:
             text += page.extract_text() + "\n"
 
     if st.button("Translate"):
-        translated = translator.translate(text, src='en', dest='vi').text
+        translated = GoogleTranslator(source='en', target='vi').translate(text)
         
         st.text_area("Kết quả", translated, height=400)
 
