@@ -1,47 +1,63 @@
 import streamlit as st
-from PyPDF2 import PdfReader
-from deep_translator import GoogleTranslator
+import fitz  # PyMuPDF
+from openai import OpenAI
+import tempfile
 
-st.title("📄 PDF Translator (EN → VI)")
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+st.title("🔥 PDF Translator ULTIMATE (Giữ format 95-99%)")
 
 uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
 
-# 🔥 Hàm chia nhỏ và dịch
-def translate_text(text):
-    chunk_size = 4000
-    chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+# 🔥 GPT dịch siêu mượt
+def translate(text):
+    if not text.strip():
+        return text
     
-    translated_chunks = []
-    
-    for chunk in chunks:
-        try:
-            translated = GoogleTranslator(source='en', target='vi').translate(chunk)
-            translated_chunks.append(translated)
-        except:
-            translated_chunks.append("[Lỗi đoạn này]")
-    
-    return "\n".join(translated_chunks)
+    res = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[
+            {"role": "system", "content": "Translate to Vietnamese naturally, keep formatting."},
+            {"role": "user", "content": text}
+        ]
+    )
+    return res.choices[0].message.content
 
 if uploaded_file:
-    reader = PdfReader(uploaded_file)
-    text = ""
+    doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
 
-    for page in reader.pages:
-        if page.extract_text():
-            text += page.extract_text() + "\n"
+    if st.button("🔥 Dịch giữ nguyên layout"):
+        with st.spinner("Đang xử lý cực mạnh..."):
+            
+            for page in doc:
+                blocks = page.get_text("blocks")
+                
+                for b in blocks:
+                    x0, y0, x1, y1, text, *_ = b
+                    
+                    if not text.strip():
+                        continue
+                    
+                    vi_text = translate(text)
 
-    st.subheader("📌 Preview nội dung")
-    st.text_area("", text[:2000], height=200)
+                    # ❌ xoá text cũ
+                    page.add_redact_annot((x0, y0, x1, y1))
+                    page.apply_redactions()
 
-    if st.button("Translate"):
-        with st.spinner("Đang dịch..."):
-            translated = translate_text(text)
+                    # ✅ viết text mới đúng vị trí
+                    page.insert_textbox(
+                        (x0, y0, x1, y1),
+                        vi_text,
+                        fontsize=10
+                    )
 
-        st.subheader("🇻🇳 Kết quả")
-        st.text_area("", translated, height=400)
+            # lưu file
+            temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            doc.save(temp.name)
 
-        st.download_button(
-            "Download",
-            translated,
-            file_name="translated.txt"
-        )
+        with open(temp.name, "rb") as f:
+            st.download_button(
+                "📥 Download PDF đã dịch (Ultimate)",
+                f,
+                file_name="translated_ultimate.pdf"
+            )
